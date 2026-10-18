@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-page: #f0edf6;
+  --color-canvas: #ffffff;
+  --color-surface: #ffffff;
+  --color-ink: #18181b;
+  --color-ink-2: #71717a;
+  --color-ink-3: #a1a1aa;
+  --color-line: #e4e4e7;
+  --color-primary: #7c3aed;
+}
+
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  color: #18181b;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-color: #ffffff;
+}
+
+/* Custom Scrollbar */
+.cortex-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.cortex-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cortex-scrollbar::-webkit-scrollbar-thumb {
+  background: #e4e4e7;
+  border-radius: 9999px;
+}
+.cortex-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #d4d4d8;
+}
+
+/* Inline Citation Badges */
+.citation-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(124, 58, 237, 0.1);
+  color: #7c3aed;
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  text-decoration: none;
+  margin: 0 0.15rem;
+  vertical-align: baseline;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.citation-link:hover {
+  background: #7c3aed;
+  color: #ffffff;
+  border-color: #6d28d9;
+  transform: translateY(-1px);
+}
+
+@keyframes pulse-orb {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 10px 25px rgba(168, 85, 247, 0.3));
+  }
+  50% {
+    transform: scale(1.02);
+    filter: drop-shadow(0 14px 30px rgba(168, 85, 247, 0.42));
+  }
+}
+
+.animate-pulse-orb {
+  animation: pulse-orb 4s ease-in-out infinite;
+}

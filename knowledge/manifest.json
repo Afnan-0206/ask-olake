@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-10-18T05:35:22.154Z",
+  "repositories": {
+    "datazip-inc/olake-docs": {
+      "commit_sha": "d06007140994ecbd239a52a9c0acf81fab4ed530",
+      "documents": 226,
+      "chunks": 1560,
+      "source_url": "https://github.com/datazip-inc/olake-docs"
+    },
+    "datazip-inc/olake": {
+      "commit_sha": "d20c68ed98ced12293cd621ac04136a946ba4290",
+      "documents": 31,
+      "chunks": 203,
+      "source_url": "https://github.com/datazip-inc/olake"
+    },
+    "datazip-inc/olake-ui": {
+      "commit_sha": "56826cf172a4c10e80a2276d0a2095313ec5b667",
+      "documents": 14,
+      "chunks": 145,
+      "source_url": "https://github.com/datazip-inc/olake-ui"
+    },
+    "datazip-inc/olake-helm": {
+      "commit_sha": "c63f10c48cd4dc2cbe3a130c6190ccedf0dafa83",
+      "documents": 9,
+      "chunks": 147,
+      "source_url": "https://github.com/datazip-inc/olake-helm"
+    },
+    "datazip-inc/olake-fusion": {
+      "commit_sha": "15ca160b298bf038f78f6639ec7aae67e4d4e33a",
+      "documents": 39,
+      "chunks": 399,
+      "source_url": "https://github.com/datazip-inc/olake-fusion"
+    }
+  },
+  "total_documents": 319,
+  "total_chunks": 2454
+}

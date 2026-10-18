@@ -1,0 +1,45 @@
+{
+  "name": "ask-olake",
+  "version": "1.0.0",
+  "description": "Fast, public, citation-first AI assistant for OLake technical documentation",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "node server/dev.js",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "deploy:cloudflare": "vite build && wrangler pages deploy dist",
+    "ingest": "node scripts/ingest-docs.mjs",
+    "test": "node --test tests/**/*.test.js"
+  },
+  "keywords": [
+    "olake",
+    "iceberg",
+    "rag",
+    "ai-assistant",
+    "openrouter",
+    "bm25"
+  ],
+  "author": "Ask OLake Team",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.475.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^6.1.0"
+  }
+}
