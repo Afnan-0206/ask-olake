@@ -142,6 +142,24 @@ export function synthesizeDocumentationAnswer(question, candidateChunks) {
     response += `From **${tertTitle}** ${tertiaryCite}:\n${tertiaryText}\n\n`;
   }
 
+  // If question explicitly asks for privileges, include dedicated privilege chunk
+  const lowerQ = (question || '').toLowerCase();
+  const wantsPriv = lowerQ.includes('privilege') || lowerQ.includes('permission') || lowerQ.includes('grant') || lowerQ.includes('user');
+  if (wantsPriv) {
+    const privilegeChunk = candidateChunks.find(c => 
+      c.text.toLowerCase().includes('replication slave') || 
+      c.text.toLowerCase().includes('replication client') || 
+      c.text.toLowerCase().includes('grant select') ||
+      (c.section && c.section.toLowerCase().includes('replication user'))
+    );
+    if (privilegeChunk && privilegeChunk !== primaryChunk && privilegeChunk !== secondaryChunk && privilegeChunk !== tertiaryChunk) {
+      const privCite = getCite(privilegeChunk);
+      const privSec = (privilegeChunk.section || 'Database Privileges & Permissions').replace(/#+/g, '').trim();
+      response += `**Required Database Privileges & Permissions** ${privCite}\n`;
+      response += `From **${privSec}** ${privCite}:\n${cleanSnippet(privilegeChunk.text, 360)}\n\n`;
+    }
+  }
+
   // Production engineering performance notes based on OLake architecture
   response += `**Production Readiness & Engineering Notes** ${primaryCite}\n`;
   response += `- **Freshness & Streaming**: Ingestion workflows track write checkpoints directly in Iceberg metadata to guarantee exactly-once delivery and minimize WAL lag ${primaryCite}.\n`;

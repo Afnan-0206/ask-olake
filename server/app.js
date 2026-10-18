@@ -232,7 +232,7 @@ export function createApp(options = {}) {
 
     try {
       // 2. Local retrieval
-      const searchResult = retrievalEngine.search(trimmedQuestion, { limit: 6 });
+      const searchResult = retrievalEngine.search(trimmedQuestion, { limit: 8 });
       const { results: candidateChunks, sufficientEvidence } = searchResult;
 
       // 3. Abstention check if retrieval finds no sufficient evidence

@@ -23,10 +23,27 @@ const STOPWORDS = new Set([
   'we', 'we\'d', 'we\'ll', 'we\'re', 'we\'ve', 'were', 'weren\'t', 'what', 'what\'s', 'when', 'when\'s',
   'where', 'where\'s', 'which', 'while', 'who', 'who\'s', 'whom', 'why', 'why\'s', 'with', 'won\'t',
   'would', 'wouldn\'t', 'you', 'you\'d', 'you\'ll', 'you\'re', 'you\'ve', 'your', 'yours', 'yourself',
-  'yourselves', 'tell', 'show', 'please', 'help', 'want', 'need'
+  'yourselves', 'tell', 'show', 'please', 'help', 'want', 'need', 'does'
 ]);
 
-// Normalize and tokenize text while preserving technical terms (e.g., docker-compose, pgoutput, wal2json)
+// Non-discriminative structural words that should not receive high section-heading multipliers
+const GENERIC_SECTION_WORDS = new Set([
+  'settings', 'setting', 'guide', 'guides', 'setup', 'overview', 'options', 'issues', 'details', 'step', 'steps', 'using'
+]);
+
+// Known connector identities for topical authority routing
+const KNOWN_CONNECTORS = [
+  { id: 'mysql', keywords: ['mysql'] },
+  { id: 'postgres', keywords: ['postgres', 'postgresql'] },
+  { id: 'mongodb', keywords: ['mongodb', 'mongo'] },
+  { id: 'oracle', keywords: ['oracle'] },
+  { id: 'mssql', keywords: ['mssql', 'sqlserver'] },
+  { id: 's3', keywords: ['s3', 'minio'] },
+  { id: 'kafka', keywords: ['kafka'] },
+  { id: 'db2', keywords: ['db2'] }
+];
+
+// Normalize and tokenize text while preserving technical terms (e.g., docker-compose, pgoutput, wal2json, binlog_format)
 export function tokenize(text) {
   if (!text || typeof text !== 'string') return [];
   
@@ -45,13 +62,18 @@ export function tokenize(text) {
     if (!STOPWORDS.has(rawWord) && rawWord.length > 1) {
       tokens.push(rawWord);
     }
-    // Also include subparts if hyphenated or underscored
+    // Also include subparts and bidirectional hyphen/underscore normalization
     if (rawWord.includes('-') || rawWord.includes('_')) {
       const parts = rawWord.split(/[-_]/);
       for (const p of parts) {
         if (!STOPWORDS.has(p) && p.length > 2) {
           tokens.push(p);
         }
+      }
+      if (rawWord.includes('-')) {
+        tokens.push(rawWord.replace(/-/g, '_'));
+      } else if (rawWord.includes('_')) {
+        tokens.push(rawWord.replace(/_/g, '-'));
       }
     }
   }
@@ -149,7 +171,7 @@ export class RetrievalEngine {
   }
 
   search(query, options = {}) {
-    const limit = options.limit ?? 6;
+    const limit = options.limit ?? 8;
     const queryTokens = tokenize(query);
 
     if (queryTokens.length === 0 || this.docCount === 0) {
@@ -200,6 +222,21 @@ export class RetrievalEngine {
       };
     }
 
+    // Detect connector identity for topical authority routing
+    let detectedConnector = null;
+    for (const conn of KNOWN_CONNECTORS) {
+      if (conn.keywords.some(k => queryTokens.includes(k) || lowerQuery.includes(k))) {
+        detectedConnector = conn.id;
+        break;
+      }
+    }
+
+    // Detect technical task intent
+    const wantsPrivileges = lowerQuery.includes('privilege') || lowerQuery.includes('privileges') || lowerQuery.includes('permission') || lowerQuery.includes('permissions') || lowerQuery.includes('grant') || lowerQuery.includes('role');
+    const wantsSettings = lowerQuery.includes('setting') || lowerQuery.includes('settings') || lowerQuery.includes('config') || lowerQuery.includes('variable') || lowerQuery.includes('prerequisite') || lowerQuery.includes('prerequisites') || lowerQuery.includes('parameter') || lowerQuery.includes('requirement') || lowerQuery.includes('requirements') || lowerQuery.includes('configure') || lowerQuery.includes('binlog') || lowerQuery.includes('wal_level');
+    const wantsCheckpoint = lowerQuery.includes('checkpoint') || lowerQuery.includes('checkpoints') || lowerQuery.includes('bounded');
+    const isCloudSpecific = lowerQuery.includes('gcp') || lowerQuery.includes('google') || lowerQuery.includes('azure') || lowerQuery.includes('rds') || lowerQuery.includes('aurora');
+
     const scores = new Float32Array(this.docCount);
     const matchedTokenCounts = new Uint8Array(this.docCount);
 
@@ -216,14 +253,14 @@ export class RetrievalEngine {
         const tfNorm = (tf * (this.k1 + 1)) / (tf + this.k1 * (1 - this.b + this.b * (docLen / this.avgDocLength)));
         let termScore = idf * tfNorm;
 
-        // Metadata boosting
+        // Metadata boosting: do not over-boost generic structural terms like "settings"
         const { titleTokens, sectionTokens, pathTokens } = this.docMetaTokens[docIndex];
         if (sectionTokens.has(term)) {
-          termScore *= 2.5; // High boost for matching section heading
+          termScore *= GENERIC_SECTION_WORDS.has(term) ? 1.1 : 2.5;
         } else if (titleTokens.has(term)) {
-          termScore *= 2.0; // Boost for document title match
+          termScore *= 2.0;
         } else if (pathTokens.has(term)) {
-          termScore *= 1.5; // Boost for file path match
+          termScore *= 1.5;
         }
 
         scores[docIndex] += termScore;
@@ -231,17 +268,75 @@ export class RetrievalEngine {
       }
     }
 
-    // Candidate selection and ranking
+    // Candidate selection and ranking with intent & connector weighting
     const candidates = [];
     for (let i = 0; i < this.docCount; i++) {
-      const rawScore = scores[i];
+      let rawScore = scores[i];
       if (rawScore > 0) {
+        const chunk = this.chunks[i];
+        const filePath = (chunk.file_path || '').toLowerCase();
+        const text = (chunk.text || '').toLowerCase();
+        const section = (chunk.section || '').toLowerCase();
+
+        // 1. Connector affinity & canonical document weighting
+        if (detectedConnector) {
+          const isDocForConnector = filePath.includes(`connectors/${detectedConnector}`) || filePath.includes(`drivers/${detectedConnector}`);
+          if (isDocForConnector) {
+            // Canonical overview or generic setup
+            if (filePath.endsWith('index.mdx') || filePath.includes('setup/generic.mdx') || filePath.includes('setup/index.mdx')) {
+              rawScore *= 1.8;
+            } else if (!isCloudSpecific && (filePath.includes('/gcp.mdx') || filePath.includes('/azure.mdx') || filePath.includes('/rds.mdx') || filePath.includes('/aurora.mdx'))) {
+              rawScore *= 0.8;
+            } else {
+              rawScore *= 1.3;
+            }
+          } else {
+            // Penalize unrelated connectors or unrelated admin docs when asking about a specific connector
+            if (filePath.includes('connectors/') || filePath.includes('install/')) {
+              rawScore *= 0.4;
+            }
+          }
+        }
+
+        // 2. Demote generic tuning snippets when asking about setup/prerequisites
+        if (wantsSettings && (section.includes('innodb settings') || section.includes('slave_pending_jobs') || text.includes('slave_pending_jobs_size_max'))) {
+          rawScore *= 0.2;
+        }
+
+        // 3. Technical intent boosts
+        if (wantsSettings) {
+          if (
+            text.includes('binlog_format') || text.includes('binlog-format') ||
+            text.includes('binlog_row_image') || text.includes('binlog-row-image') ||
+            text.includes('wal_level') || text.includes('change streams') ||
+            section.includes('prerequisite') || section.includes('binary logging') || section.includes('logical replication')
+          ) {
+            rawScore *= 1.6;
+          }
+          if (text.includes('5.5+') || text.includes('5.7+') || text.includes('8.0+')) {
+            rawScore *= 1.2;
+          }
+        }
+
+        if (wantsPrivileges && (
+          text.includes('replication slave') || text.includes('replication client') ||
+          text.includes('grant select') || text.includes('create user') ||
+          text.includes('replication role') ||
+          section.includes('replication user') || section.includes('permission')
+        )) {
+          rawScore *= 1.8;
+        }
+
+        if (wantsCheckpoint && (text.includes('checkpoint') || section.includes('checkpoint'))) {
+          rawScore *= 2.0;
+        }
+
         // Multi-term coverage boost: reward documents containing multiple query terms
         const coverageRatio = matchedTokenCounts[i] / queryTokens.length;
         const adjustedScore = rawScore * (1 + coverageRatio * 0.5);
 
         candidates.push({
-          chunk: this.chunks[i],
+          chunk,
           score: adjustedScore,
           matchedTokens: matchedTokenCounts[i]
         });
