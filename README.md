@@ -18,40 +18,83 @@ Ask OLake is a fast, citation-first AI assistant built to answer technical quest
 
 ---
 
-## Architectural Pipeline
+## Architecture & System Pipeline
 
+```mermaid
+flowchart TD
+    subgraph Client["Client & Integration Layer"]
+        UI["🖥️ React + Vite Web App<br/><code>/</code>"]
+        DEMO["📱 Chat Widget Demo<br/><code>/demo</code>"]
+        EMBED["📦 Embeddable Iframe<br/><code>/embed</code>"]
+    end
+
+    subgraph Edge["Vercel Edge & Serverless Gateway"]
+        ROUTER["vercel.json Routing & Rewrites"]
+        API_FN["Serverless Function<br/><code>api/index.js</code>"]
+    end
+
+    subgraph Server["Express Backend (server/app.js)"]
+        SEC["CORS & Security Headers<br/><code>frame-ancestors *;</code>"]
+        VAL["Input Validator & Sanitizer<br/>Length ≤ 1500 chars · Injection Filter"]
+        VERS["Metadata Endpoints<br/><code>GET /version</code> · <code>GET /models</code> · <code>GET /health</code>"]
+    end
+
+    subgraph Engine["BM25 Retrieval Engine (server/retrieval.js)"]
+        BM25["Lexical BM25 Search<br/>Warm Singleton Index"]
+        CORPUS[("📚 Official Knowledge Corpus<br/>2,454 Chunks · 5 Repositories")]
+        ABSTAIN{"Sufficient<br/>Evidence?"}
+        REFUSAL["Honest Abstention / Refusal<br/><code>sources: []</code>"]
+    end
+
+    subgraph LLM["OpenRouter Generation Pipeline (server/provider.js)"]
+        PROMPT["Grounded Prompt Builder<br/>System + Evidence Chunks"]
+        M1["1. z-ai/glm-4.7-flash (Primary)"]
+        M2["2. google/gemini-2.5-flash-lite (Fallback 1)"]
+        M3["3. deepseek/deepseek-v4.1-flash (Fallback 2)"]
+    end
+
+    subgraph Output["Citation Verification (server/citations.js)"]
+        CITE["Citation Validator & Renumbering<br/><code>[S1]</code> ➔ <code>[1]</code> · Reject Hallucinations"]
+        JSON["Strict JSON Contract<br/><code>{ answer: string, sources: string[] }</code>"]
+    end
+
+    UI --> ROUTER
+    DEMO --> ROUTER
+    EMBED --> ROUTER
+    ROUTER --> API_FN
+    API_FN --> SEC
+    SEC --> VAL
+    VAL --> BM25
+    CORPUS -.-> BM25
+    BM25 --> ABSTAIN
+    ABSTAIN -- "No (Unsupported / Out-of-Domain)" --> REFUSAL
+    ABSTAIN -- "Yes (Grounded Evidence)" --> PROMPT
+    PROMPT --> M1
+    M1 -- "Failover" --> M2
+    M2 -- "Failover" --> M3
+    M1 & M2 & M3 --> CITE
+    CITE --> JSON
+    REFUSAL --> JSON
+    JSON --> UI
+    JSON --> DEMO
+    JSON --> EMBED
+
+    classDef client fill:#3b82f615,stroke:#3b82f6,stroke-width:2px;
+    classDef edge fill:#8b5cf615,stroke:#8b5cf6,stroke-width:2px;
+    classDef server fill:#10b98115,stroke:#10b981,stroke-width:2px;
+    classDef engine fill:#f59e0b15,stroke:#f59e0b,stroke-width:2px;
+    classDef llm fill:#ec489915,stroke:#ec4899,stroke-width:2px;
+    classDef output fill:#06b6d415,stroke:#06b6d4,stroke-width:2px;
+
+    class UI,DEMO,EMBED client;
+    class ROUTER,API_FN edge;
+    class SEC,VAL,VERS server;
+    class BM25,CORPUS,ABSTAIN,REFUSAL engine;
+    class PROMPT,M1,M2,M3 llm;
+    class CITE,JSON output;
 ```
-User Question
-      │
-      ▼
-Input Validation (length <= 1500 chars, non-empty, type check)
-      │
-      ▼
-Local Lexical Retrieval (BM25 + Technical Tokenizer + Metadata Boosting)
-      │
-      ▼
-Evidence Selection (4-6 relevant chunks, deduplicated by URL & section)
-      │
-      ├── [Insufficient Evidence or Unknown Domain] ──► Immediate Abstention Response (sources: [])
-      │
-      ▼
-OpenRouter Integration (Approved Models Only with Sequential Fallback)
-  1. z-ai/glm-4.7-flash (Primary)
-  2. google/gemini-2.5-flash-lite (Fallback 1)
-  3. deepseek/deepseek-v4.1-flash (Fallback 2)
-      │
-      ▼
-Citation Validator & Renumbering Engine
-  - Rejects hallucinated source IDs (e.g. S99)
-  - Maps evidence IDs to verified corpus URLs
-  - Renumbers inline markers to match sources array: [1], [2]
-      │
-      ▼
-Strict JSON Response Contract {"answer": "...", "sources": ["..."]}
-      │
-      ▼
-Interactive Web Interface & Embeddable /embed Route
-```
+
+*Visual architecture mapped with [Archify](https://github.com/tt-a1i/archify).*
 
 ### Anti-Hallucination & Grounding Policy
 
